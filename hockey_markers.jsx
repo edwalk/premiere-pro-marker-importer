@@ -5,7 +5,7 @@
  * 
  * Expected CSV Format:
  * - First row: Header (will be skipped)
- * - First column: Timestamp (in seconds or HH:MM:SS format)
+ * - First column: Timestamp (in seconds)
  * - Second column: Event/comment text
  * 
  * Usage:
@@ -72,79 +72,36 @@ function readCSV(filePath) {
     throw new Error("File does not exist: " + filePath);
   }
 
-  try {
-    file.open('r');
-    var data = [];
-    var isFirstLine = true;
-    var lineNumber = 0;
-
-    while (!file.eof) {
-      lineNumber++;
-      var line = file.readln();
-
-      // Skip empty lines
-      if (!line || trim(line) === "") {
-        continue;
-      }
-
-      // Split the line and clean up each column
-      var columns = line.split(',').map(function (col) {
-        return trim(col.replace(/^["']|["']$/g, '')); // Remove quotes if present
-      });
-
-      if (isFirstLine) {
-        // Validate header
-        if (columns.length < 2) {
-          throw new Error("CSV header must contain at least two columns: Timestamp and Comment");
-        }
-        isFirstLine = false;
-        continue;
-      }
-
-      // Validate data row
-      if (columns.length < 2) {
-        log("Warning: Line " + lineNumber + " is missing required columns. Skipping.", 'warning');
-        continue;
-      }
-
+  file.open('r');
+  var data = [];
+  var isFirstLine = true;
+  while (!file.eof) {
+    var line = file.readln();
+    if (isFirstLine) {
+      isFirstLine = false;
+      continue; // Skip the header row
+    }
+    if (line !== "") { // Ensure the line is not empty
+      var columns = line.split(',');
       data.push(columns);
     }
-
-    return data;
-  } finally {
-    file.close();
   }
+  file.close();
+  return data;
 }
 
 function parseCSVData(data) {
   var markers = [];
   for (var i = 0; i < data.length; i++) {
-    var row = data[i];
-    var timestamp = row[0];
-    var comment = row[1];
-
-    // Skip if timestamp is empty
-    if (!timestamp) {
-      log("Warning: Empty timestamp at row " + (i + 2) + ". Skipping.", 'warning');
-      continue;
+    if (data[i].length >= 2) { // Ensure there are at least two columns
+      // Corrected: Timestamp is in the first column, Event (comment) in the second
+      var timestamp = trim(String(data[i][0])); // Get timestamp from the first column
+      var comment = trim(String(data[i][1]));   // Get event description from the second column
+      markers.push({ timestamp: timestamp, comment: comment });
+    } else {
+      alert("Skipping invalid row: " + data[i].join(", "));
     }
-
-    // Skip if comment is empty
-    if (!comment) {
-      log("Warning: Empty comment at row " + (i + 2) + ". Skipping.", 'warning');
-      continue;
-    }
-
-    markers.push({
-      timestamp: timestamp,
-      comment: comment
-    });
   }
-
-  if (markers.length === 0) {
-    throw new Error("No valid markers found in the CSV file");
-  }
-
   return markers;
 }
 
@@ -180,36 +137,21 @@ function insertMarkers(markers) {
     throw new Error("No active sequence found.");
   }
 
-  var insertedCount = 0;
-  var skippedCount = 0;
-
   for (var i = 0; i < markers.length; i++) {
     var marker = markers[i];
-    try {
-      var time = parseTimeString(marker.timestamp);
-      var markerObj = sequence.markers.createMarker(time);
-      markerObj.name = marker.comment;
-      insertedCount++;
-    } catch (error) {
-      log("Failed to insert marker at row " + (i + 2) + ": " + error.message, 'warning');
-      skippedCount++;
+    var time = parseFloat(marker.timestamp); // Convert timestamp to float
+    if (isNaN(time)) {
+      alert("Invalid time value: " + marker.timestamp);
+      continue;
     }
+    var markerObj = sequence.markers.createMarker(time);
+    markerObj.name = marker.comment;
   }
-
-  if (skippedCount > 0) {
-    log(skippedCount + " markers were skipped due to errors.", 'warning');
-  }
-
-  return {
-    inserted: insertedCount,
-    skipped: skippedCount
-  };
 }
 
 function selectCSVFile() {
-  var file = File.openDialog(CONFIG.fileDialogTitle, CONFIG.fileDialogFilter);
+  var file = File.openDialog("Select a CSV file", "CSV Files:*.csv");
   if (file !== null) {
-    log("Selected file: " + file.fsName, 'debug');
     return file.fsName;
   }
   return null;
@@ -222,18 +164,27 @@ function main() {
       throw new Error("No file selected.");
     }
 
-    log("Processing file: " + filePath);
     var data = readCSV(filePath);
 
-    if (data.length === 0) {
-      throw new Error("CSV file is empty or contains no valid data.");
+    // Debug: Check the contents of data
+    var dataString = "";
+    for (var i = 0; i < data.length; i++) {
+      dataString += data[i].join(", ") + "\n";
+    }
+    alert("CSV Data:\n" + dataString);
+
+    // Check if data is not empty
+    if (data.length > 0) {
+      alert("First row of CSV: " + data[0].join(", "));
+    } else {
+      alert("CSV file is empty.");
     }
 
     var markers = parseCSVData(data);
-    var result = insertMarkers(markers);
-    log("Successfully imported " + result.inserted + " markers. " + result.skipped + " were skipped.", 'info');
+    insertMarkers(markers);
+    alert("Markers inserted successfully!");
   } catch (error) {
-    log(error.message, 'error');
+    alert("Error: " + error.message);
   }
 }
 

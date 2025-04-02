@@ -10,7 +10,10 @@ A simple ExtendScript tool for Adobe Premiere Pro that imports markers from a CS
 - Provides visual feedback during import process
 
 ## Usage
+
+Intended to be used in conjunction with [my Ice Hockey Event Tracker](https://github.com/edwalk/ice-hockey-event-tracker).
 1. Open your sequence in Premiere Pro
 2. Run the script
 3. Select your CSV file (first column: timestamp in seconds, second column: marker comment)
 4. Markers will be automatically placed in your sequence
+
